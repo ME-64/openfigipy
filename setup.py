@@ -32,7 +32,7 @@ setup(
         zip_safe = False,
         install_requires=['pandas', 'ratelimit', 'cachetools', 'requests'],
         extras_require={
-            "dev": [],
+            "dev": []},
         classifiers=[
             'Development Status :: 3 - Alpha',
             'Intended Audience :: Developers',
