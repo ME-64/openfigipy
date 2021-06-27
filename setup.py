@@ -20,6 +20,7 @@ setup(
   url = 'https://github.com/ME-64/openfigipy',
   keywords = ['API wrapper', 'Financial Reference Data', 'Open FIGI', 'openfigi', 'bloomberg', 'figi'],
   include_package_data = True,
+  install_requires=['pandas', 'ratelimit', 'cachetools'],
   classifiers=[
     'Development Status :: 3 - Alpha',
     'Intended Audience :: Developers',
