@@ -70,46 +70,6 @@ class OpenFigiClient:
         """Close the API session"""
         self.session.close()# }}}
 
-    def _build_mapping_request(self, **kwargs):# {{{
-        """Build the inner jobs for a mapping request
-
-        Parameters
-        ----------
-        **kwargs
-            A list of keywords that the Open FIGI API Mapping request takes
-        """
-
-        job = {}
-        for k, v in kwargs.items():
-            if (k not in ['strike', 'contractSize', 'coupon', 'expiration', 'maturity']) \
-                    and pd.isnull(v):
-                        continue
-            job.update(kwargs)
-        print(job)
-        return job# }}}
-
-    def _build_figi_request(self, figis):# {{{
-        """build a requeset that specifically looks up using ID_BB_GLOBAL
-
-        Parameters
-        ----------
-        figis: str or iterable
-            The list of FIGIs (ID_BB_GLOBAL) to look-up using the API
-
-        """
-
-        if isinstance(figis, str):
-            figis = [figis]
-
-        maps = []
-
-        for fig in figis:
-            tmp = self._build_mapping_request(idType='ID_BB_GLOBAL', idValue=fig, includeUnlistedEquities=True)
-            maps.append(tmp)
-
-        maps = list(self._divide_chunks(maps, self._mapping_job_limit))
-        return maps# }}}
-
     def _divide_chunks(self, l, n):# {{{
         # looping till length l
         for i in range(0, len(l), n): 
@@ -162,38 +122,6 @@ class OpenFigiClient:
             results.extend(result)
         return results# }}}
 
-    def _infer_not_found_figi(self, lookup_figis, found_figis):# {{{
-        """workout the figis where no result was found when querying the API
-
-        Parameters
-        ----------
-        lookup_figis: list
-            list of the FIGIs that were queried
-        found_figis: list
-            list of the FIGIs that were returned from the query
-
-        """
-
-        base_cols = ['ticker', 'exchCode', 'compositeFIGI', 'securityType', 'marketSector',
-                'shareClassFIGI', 'securityType2', 'securityDescription']
-
-
-        if len(found_figis) == 0:
-            ndf = pd.Series(lookup_figis).to_frame(name='figi')
-            for col in base_cols:
-                ndf[col] = None
-            return ndf
-
-        lookup_series = pd.Series(lookup_figis)
-        found_series = pd.Series(found_figis)
-        not_found_series = lookup_series.loc[~lookup_series.isin(found_series)]
-
-        ndf = not_found_series.to_frame(name='figi')
-        for col in base_cols:
-            ndf[col] = None
-        ndf['found_flag'] = False
-        return ndf# }}}
-
     def map_figis(self, figis):# {{{
         """Map a figi or iterable collection of figis to the Open FIGI database
 
@@ -205,26 +133,10 @@ class OpenFigiClient:
         if isinstance(figis, str):
             figis = [figis]
 
-        # self._validate_figis(figis)
-
-
         df = pd.DataFrame({'idType': ['ID_BB_GLOBAL'] * len(figis), 'idValue': figis})
 
         return self.map_dataframe(df)
         # }}}
-
-    def _validate_figis(self, figis):# {{{
-        """perform checks to ensure valid figis are supplied"""
-
-        if isinstance(figis, str):
-            figis = [figis]
-
-        for figi in figis:
-            assert figi.upper()[2] == 'G'
-            assert len(figi) == 12
-            mid_figi = figi[3:10]
-            assert not any(x in mid_figi.lower() for x in ['a', 'e', 'i', 'o', 'u'])
-        return# }}}
 
     @ratelimit.sleep_and_retry# {{{
     @ratelimit.limits(calls=20, period=60)
@@ -364,15 +276,15 @@ class OpenFigiClient:
 
         Parameters
         ----------
-            df: pd.DataFrame
-                the dataframe to map, the columns should be valid parameters to be
-                given to the Open FIGI API
+        df: pd.DataFrame
+            the dataframe to map, the columns should be valid parameters to be
+            given to the Open FIGI API
 
         Returns
         -------
-            result: pd.DataFrame
-                returns the same dataframe as the initial input with the addition
-                of the open figi result columns
+        result: pd.DataFrame
+            returns the same dataframe as the initial input with the addition
+            of the open figi result columns
         """
 
         assert 'idType' in df.columns

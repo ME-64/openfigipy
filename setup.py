@@ -9,13 +9,17 @@ from glob import glob
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
 
+exec(open('src/openfigipy/_version.py').read())
+
+
+
 
 setup(
         name = 'openfigipy',
         packages = find_packages('src'),
         package_dir = {'': 'src'},
         py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
-        version = '0.0.5',
+        version = __version__,
         license='MIT',
         description = 'A python wrapper around the Open FIGI API that leverages pandas DataFrames',
         long_description = README,
@@ -27,6 +31,8 @@ setup(
         include_package_data = True,
         zip_safe = False,
         install_requires=['pandas', 'ratelimit', 'cachetools', 'requests'],
+        extras_require={
+            "dev": [],
         classifiers=[
             'Development Status :: 3 - Alpha',
             'Intended Audience :: Developers',

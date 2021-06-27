@@ -96,9 +96,12 @@ for understanding why results might not have been returned.
 Todo
 ----
 
-- Setup testing (integration and unit testing)
-- Setup automatic documentation generation
+- Setup testing (integration and unit testing). Learn about mocking
+- Setup automatic documentation generation w/ Sphinx
+- explore if type hinting could help
+- Setup automatic linting and checking
 - Setup continious integration
     - tests
     - documentation
     - pypi publishing
+
