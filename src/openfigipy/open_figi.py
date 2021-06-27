@@ -144,7 +144,7 @@ class OpenFigiClient:
 
         df = pd.DataFrame({'idType': ['ID_BB_GLOBAL'] * len(figis), 'idValue': figis})
 
-        return self.map_dataframe(df)
+        return self.map(df)
         # }}}
 
     @ratelimit.sleep_and_retry# {{{
@@ -195,7 +195,7 @@ class OpenFigiClient:
             json_result = self._send_auth_search_filter_request(js, typ=typ)
         else:
             json_result = self._send_unauth_search_filter_request(js, typ=typ)
-        print(js)
+        # print(js)
         return json_result# }}}
 
     @cached(cache=TTLCache(maxsize=10, ttl=43200))# {{{

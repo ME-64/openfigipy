@@ -16,7 +16,7 @@ df = pd.DataFrame({'idType': ['TICKER', 'ID_BB_GLOBAL'],
     'idValue': ['IBM', 'BBG0032FLQC3'], 'currency': ['USD', 'USD'],
     'marketSecDes': ['Equity', 'Equity']})
 
-x = ofc.map_dataframe(df)
+x = ofc.map(df)
 
 print(x)
 
