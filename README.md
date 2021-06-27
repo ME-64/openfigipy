@@ -93,3 +93,12 @@ for understanding why results might not have been returned.
 
 
 
+Todo
+----
+
+- Setup testing (integration and unit testing)
+- Setup automatic documentation generation
+- Setup continious integration
+    - tests
+    - documentation
+    - pypi publishing
