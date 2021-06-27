@@ -10,7 +10,7 @@ import ratelimit
 from cachetools import TTLCache, cached
 
 
-class OpenFigi:
+class OpenFigiClient:
 
     BASE_URL = 'https://api.openfigi.com/v3'# {{{
     MAPPING_URL = BASE_URL + '/mapping'
@@ -389,7 +389,7 @@ class OpenFigi:
         return result_df# }}}
 
 
-f = OpenFigi()
+f = OpenFigiClient()
 f.connect()
 
 x = f.map_figis(['BBG0032FLQC3', 'BBG0032FLQC1', 'BBG00JPR0LW9'])
@@ -399,6 +399,10 @@ df = pd.DataFrame({'idType': ['ID_BB_GLOBAL', 'ID_BB_GLOBAL', 'ID_BB_GLOBAL'],
     'idValue': ['BBG0032FLQC3', 'BBG00JPR0LW9', 'BBG00JPR0LW6']})
 
 df = pd.DataFrame({'idType': 'TICKER', 'idValue': 'IBM', 'marketSecDes': 'Equity',
-    'currency': 'USD', 'exchCode': None}, index=[0])
+    'currency': 'USD', 'exchCode': 'US'}, index=[0])
+
+df = pd.DataFrame({'idType': ['TICKER', 'ID_BB_GLOBAL'],
+    'idValue': ['IBM', 'BBG0032FLQC3'], 'currency': ['USD', 'USD'],
+    'marketSecDes': ['Equity', 'Equity'], 'exchCode': ['US', 'US']})
 
 x = f.map_dataframe(df)
