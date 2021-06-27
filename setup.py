@@ -1,6 +1,7 @@
 from setuptools import setup
 from setuptools import find_packages
 import pathlib
+from glob import glob
 
 # python3 setup.py sdist bdist_wheel
 # twine upload dist/*
@@ -25,11 +26,12 @@ setup(
         keywords = ['API wrapper', 'Financial Reference Data', 'Open FIGI', 'openfigi', 'bloomberg', 'figi'],
         include_package_data = True,
         zip_safe = False,
-        install_requires=['pandas', 'ratelimit', 'cachetools'],
+        install_requires=['pandas', 'ratelimit', 'cachetools', 'requests'],
         classifiers=[
             'Development Status :: 3 - Alpha',
             'Intended Audience :: Developers',
             'License :: OSI Approved :: MIT License',
             'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.9',
             ]
         )
