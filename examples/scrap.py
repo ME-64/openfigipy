@@ -19,3 +19,14 @@ df = pd.DataFrame({'idType': ['TICKER', 'ID_BB_GLOBAL'],
 x = ofc.map_dataframe(df)
 
 print(x)
+
+x = ofc.search(';laksdfja;slkfjasd')
+
+x = ofc.search('AAPL', result_limit=10, marketSecDes='Equity')
+
+y = ofc.filter(exchCode='US', result_limit=101, marketSecDes='Equity')
+
+
+q = ofc._build_search_filter_request(typ='filter', exchCode='US')
+
+res = ofc._send_search_filter_request(q, typ='filter')

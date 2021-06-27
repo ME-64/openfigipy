@@ -15,6 +15,7 @@ class OpenFigiClient:
     BASE_URL = 'https://api.openfigi.com/v3'# {{{
     MAPPING_URL = BASE_URL + '/mapping'
     SEARCH_URL = BASE_URL + '/search'
+    FILTER_URL = BASE_URL + '/filter'
 
     MAPPING_ENUM_URL = MAPPING_URL + '/values/{key}'
 
@@ -23,7 +24,13 @@ class OpenFigiClient:
     SECURITY_TYPE_URL = ENUM_URL + '/securityType'
     MIC_CODE_URL = ENUM_URL + '/micCode'
     MARKET_SEC_DES_URL = ENUM_URL + '/marketSecDes'
-    STATE_CODE_URL = ENUM_URL + '/stateCode'# }}}
+    STATE_CODE_URL = ENUM_URL + '/stateCode'
+
+    ALL_COLS = ['figi', 'name', 'exchCode', 'compositeFIGI',
+            'securityType', 'marketSector', 'shareClassFIGI',
+            'securityType2', 'securityDescription']
+
+    # }}}
 
     def __init__(self, api_key=None, **kwargs):# {{{
         """
@@ -37,6 +44,7 @@ class OpenFigiClient:
         self.api_key = api_key
         self.kwargs = kwargs 
         self._mapping_job_limit = 10
+        self._search_filter_result_limit = 100
         # }}}
 
     def connect(self):# {{{
@@ -51,6 +59,7 @@ class OpenFigiClient:
         if self.api_key is not None:
             headers.update({'X-OPENFIGI-APIKEY': self.api_key})
             self._mapping_job_limit = 25
+            self._search_filter_result_limit = 150
 
 
         retries = urllib3.util.retry.Retry(total=2, 
@@ -140,7 +149,7 @@ class OpenFigiClient:
 
     @ratelimit.sleep_and_retry# {{{
     @ratelimit.limits(calls=20, period=60)
-    def _send_auth_search_request(self, js):
+    def _send_auth_search_filter_request(self, js, typ='search'):
         """send the complete request to the Open FIGI API, with API key rate limit
 
         Parameters
@@ -148,12 +157,17 @@ class OpenFigiClient:
         js: dict
             the data to be sent in the POST request
         """
-        request = self.session.post(self.SEARCH_URL, json=js)
+        if typ == 'search':
+            url = self.SEARCH_URL
+        elif typ == 'filter':
+            url = self.FILTER_URL
+
+        request = self.session.post(url, json=js)
         return request.json()# }}}
 
     @ratelimit.sleep_and_retry# {{{
     @ratelimit.limits(calls=5, period=60)
-    def _send_unauth_search_request(self, js):
+    def _send_unauth_search_filter_request(self, js, typ='search'):
         """send the complete request to the Open FIGI API, with non-API Key rate limit
 
         Parameters
@@ -161,10 +175,16 @@ class OpenFigiClient:
         json: dict
             the data to be sent in the POST request
         """
-        request = self.session.post(self.SEARCH_URL, json=js)
+
+        if typ == 'search':
+            url = self.SEARCH_URL
+        elif typ == 'filter':
+            url = self.FILTER_URL
+        request = self.session.post(url, json=js)
+
         return request.json()# }}}
 
-    def _send_search_request(self, js):# {{{
+    def _send_search_filter_request(self, js, typ='search'):# {{{
         """helper method to send requests with the correct rate limit
         Parameters
         ----------
@@ -172,21 +192,14 @@ class OpenFigiClient:
             the data to be sent in the POST request
         """
         if self.api_key:
-            json_result = self._send_auth_search_request(js)
+            json_result = self._send_auth_search_filter_request(js, typ=typ)
         else:
-            json_result = self._send_unauth_search_request(js)
+            json_result = self._send_unauth_search_filter_request(js, typ=typ)
+        print(js)
         return json_result# }}}
 
-    def _send_search_requests(self, jobs):# {{{
-        """simple loop wrapper around `self._send_search_request`"""
-        results = []
-        for job in jobs:
-            result = self._send_search_request(job)
-            results.extend(result)
-        return results# }}}
-
     @cached(cache=TTLCache(maxsize=10, ttl=43200))# {{{
-    def _get_mapping_enums(self, enum, use_cache=True):
+    def get_mapping_enums(self, enum, use_cache=True):
         """get the list of valid values for a given key in the mapping query
 
         Parameters
@@ -194,6 +207,11 @@ class OpenFigiClient:
         enum: str 
             One of: idType, exchCode, micCode, currency, marketSecDes, securityType,
             securityType2, stateCode
+
+        Returns
+        -------
+        results: list
+            A list of the valid values for the given `enum` key
         """
 
         url = self.MAPPING_ENUM_URL.format(key=enum)
@@ -220,10 +238,9 @@ class OpenFigiClient:
         q_cols = df.columns.tolist()
         df_dict = df.to_dict('records')
 
+        comb_cols = q_cols + self.ALL_COLS + ['result_number', 'status_code', 'status_message']
 
-        data = pd.DataFrame(columns=q_cols + ['result_number', 'figi', 'name', 'ticker', 'exchCode', 
-            'compositeFIGI', 'securityType', 'marketSector', 'shareClassFIGI',
-            'securityType2', 'securityDescription', 'status_code', 'status_message'])
+        data = pd.DataFrame(columns=comb_cols)
 
         cleaned_results = []
 
@@ -271,7 +288,7 @@ class OpenFigiClient:
 
         return new_df_dict# }}}
 
-    def map_dataframe(self, df):# {{{
+    def map(self, df):# {{{
         """map a pandas DataFrame to values from the Open FIGI API
 
         Parameters
@@ -303,3 +320,84 @@ class OpenFigiClient:
         result_df = self._parse_mapping_result(result, df)
         return result_df# }}}
 
+    def _build_search_filter_request(self, query=None, start=None, typ='search', **kwargs):# {{{
+        """building a search or filter request"""
+
+        data_dict = {}
+        if typ == 'search':
+            data_dict['query'] = query
+        if start:
+            data_dict['start'] = start
+
+        if kwargs:
+            data_dict.update(kwargs)
+        return data_dict# }}}
+
+    def _search_filter_pagnation(self, query='', typ='search', result_limit=100, **kwargs):# {{{
+        js = self._build_search_filter_request(query=query, typ=typ, start=None, **kwargs)
+        result = self._send_search_filter_request(js, typ=typ)
+
+        tot = 0
+
+        while 'data' in result and len(result['data']):
+            for part in result['data']:
+                yield part
+                tot += 1
+                if tot >= result_limit:
+                    break
+            if ('next' in result) and tot < result_limit:
+                js = self._build_search_filter_request(query=query, typ=typ, start=result['next'], **kwargs)
+                result = self._send_search_filter_request(js, typ=typ)
+            else:
+                break# }}}
+
+    def search(self, query, result_limit=100, **kwargs):# {{{
+        """Search the Open FIGI API for a given query
+
+        Parameters
+        ----------
+        query: str
+            The text term to search for
+        result_limit: int
+            The maximum number of results to return. This function will automatically
+            handle the pagnation of requests
+        kwargs
+            Additional arguments provided to the Open FIGI API as part of the data object.
+            Refer to the documentation for the list of possible values
+
+        """
+
+        typ = 'search'
+
+        results = []
+
+        gen_results = self._search_filter_pagnation(query=query, typ=typ, result_limit=result_limit, **kwargs)
+
+        for i, result in enumerate(gen_results):
+            results.append(result)
+        return pd.DataFrame(results, columns=self.ALL_COLS)# }}}
+
+    def filter(self, result_limit=100, **kwargs):# {{{
+        """Filter the Open FIGI API for a given query
+
+        Parameters
+        ----------
+        result_limit: int
+            The maximum number of results to return. This function will automatically
+            handle the pagnation of requests
+        kwargs
+            Additional arguments provided to the Open FIGI API as part of the data object.
+            Refer to the documentation for the list of possible values
+
+        """
+
+        typ = 'filter'
+
+        results = []
+
+
+        gen_results = self._search_filter_pagnation(typ=typ, result_limit=result_limit, **kwargs)
+
+        for i, result in enumerate(gen_results):
+            results.append(result)
+        return pd.DataFrame(results, columns=self.ALL_COLS)# }}}
