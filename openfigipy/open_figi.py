@@ -1,24 +1,37 @@
 import requests
-import pandas as pd
 import time
-import ratelimit
 import urllib3
 import json
+import re
+import os
 
-_API_KEY = '36256111-b28e-45e1-abcf-6db9960da7db'
+import pandas as pd
+import ratelimit
+from cachetools import TTLCache, cached
+
 
 class OpenFigi:
 
-    BASE_URL = 'https://api.openfigi.com'
-    MAPPING_URL = BASE_URL + '/v3/mapping'
-    SEARCH_URL = BASE_URL + '/v3/search'
+    BASE_URL = 'https://api.openfigi.com/v3'# {{{
+    MAPPING_URL = BASE_URL + '/mapping'
+    SEARCH_URL = BASE_URL + '/search'
+
+    MAPPING_ENUM_URL = MAPPING_URL + '/values/{key}'
+
+    ENUM_URL = 'https://www.openfigi.com/api/enumValues/v3'
+    EXCH_CODE_URL = ENUM_URL + '/exchCode'
+    SECURITY_TYPE_URL = ENUM_URL + '/securityType'
+    MIC_CODE_URL = ENUM_URL + '/micCode'
+    MARKET_SEC_DES_URL = ENUM_URL + '/marketSecDes'
+    STATE_CODE_URL = ENUM_URL + '/stateCode'# }}}
 
     def __init__(self, api_key=None, **kwargs):# {{{
         """
         Parameters
         ----------
-        api_key : str
-            The API key obtained from Open FIGI
+        api_key : str or None
+            The API key obtained from Open FIGI. This can also be specified with the
+            environment variable OPENFIGI_API_KEY
         """
 
         self.api_key = api_key
@@ -30,6 +43,11 @@ class OpenFigi:
         """Start the API session with the API keys"""
 
         headers = {'Content-Type': 'Application/json'}
+
+        if ('OPENFIGI_API_KEY' in os.environ.keys()) and (self.api_key is None):
+            self.api_key = os.environ['OPENFIGI_API_KEY']
+
+
         if self.api_key is not None:
             headers.update({'X-OPENFIGI-APIKEY': self.api_key})
             self._mapping_job_limit = 25
@@ -62,7 +80,12 @@ class OpenFigi:
         """
 
         job = {}
-        job.update(kwargs)
+        for k, v in kwargs.items():
+            if (k not in ['strike', 'contractSize', 'coupon', 'expiration', 'maturity']) \
+                    and pd.isnull(v):
+                        continue
+            job.update(kwargs)
+        print(job)
         return job# }}}
 
     def _build_figi_request(self, figis):# {{{
@@ -129,14 +152,13 @@ class OpenFigi:
             json_result = self._send_auth_mapping_request(js)
         else:
             json_result = self._send_unauth_mapping_request(js)
-        print(json_result)
         return json_result# }}}
 
     def _send_mapping_requests(self, jobs):# {{{
         """simple loop wrapper around `self._send_mapping_request`"""
         results = []
         for job in jobs:
-            result = self._send_mapping_request(chunk)
+            result = self._send_mapping_request(job)
             results.extend(result)
         return results# }}}
 
@@ -183,30 +205,200 @@ class OpenFigi:
         if isinstance(figis, str):
             figis = [figis]
 
-        map_jobs = self._build_figi_request(figis) # creates the list of jobs to send to API
-
-        results = self._send_mapping_request(map_jobs) # sends the list of jobs to the API
-
-        final_result = []
-        # iterate through and filter out those that results weren't found for
-        for res in results:
-            if 'data' in res.keys():
-                if len(res['data']) > 1:
-                    raise ValueError(f'multiple results found, not expected for figi search {res}')
-                final_result.append(res['data'][0])
-
-        found_figis = pd.DataFrame(final_result)
-        found_figis['found_flag'] = True
-
-        not_found_figis = self._infer_not_found_figi(figis, found_figis['figi'].tolist())
-
-        combined_df = combined_df.append(not_found_figis, ignore_index=True)
-        combined_df.drop_duplicates(inplace=True)
-
-        return combined_df# }}}
+        # self._validate_figis(figis)
 
 
-f = OpenFigi(api_key=_API_KEY)
+        df = pd.DataFrame({'idType': ['ID_BB_GLOBAL'] * len(figis), 'idValue': figis})
+
+        return self.map_dataframe(df)
+        # }}}
+
+    def _validate_figis(self, figis):# {{{
+        """perform checks to ensure valid figis are supplied"""
+
+        if isinstance(figis, str):
+            figis = [figis]
+
+        for figi in figis:
+            assert figi.upper()[2] == 'G'
+            assert len(figi) == 12
+            mid_figi = figi[3:10]
+            assert not any(x in mid_figi.lower() for x in ['a', 'e', 'i', 'o', 'u'])
+        return# }}}
+
+    @ratelimit.sleep_and_retry# {{{
+    @ratelimit.limits(calls=20, period=60)
+    def _send_auth_search_request(self, js):
+        """send the complete request to the Open FIGI API, with API key rate limit
+
+        Parameters
+        ----------
+        js: dict
+            the data to be sent in the POST request
+        """
+        request = self.session.post(self.SEARCH_URL, json=js)
+        return request.json()# }}}
+
+    @ratelimit.sleep_and_retry# {{{
+    @ratelimit.limits(calls=5, period=60)
+    def _send_unauth_search_request(self, js):
+        """send the complete request to the Open FIGI API, with non-API Key rate limit
+
+        Parameters
+        ----------
+        json: dict
+            the data to be sent in the POST request
+        """
+        request = self.session.post(self.SEARCH_URL, json=js)
+        return request.json()# }}}
+
+    def _send_search_request(self, js):# {{{
+        """helper method to send requests with the correct rate limit
+        Parameters
+        ----------
+        json: dict
+            the data to be sent in the POST request
+        """
+        if self.api_key:
+            json_result = self._send_auth_search_request(js)
+        else:
+            json_result = self._send_unauth_search_request(js)
+        return json_result# }}}
+
+    def _send_search_requests(self, jobs):# {{{
+        """simple loop wrapper around `self._send_search_request`"""
+        results = []
+        for job in jobs:
+            result = self._send_search_request(job)
+            results.extend(result)
+        return results# }}}
+
+    @cached(cache=TTLCache(maxsize=10, ttl=43200))# {{{
+    def _get_mapping_enums(self, enum, use_cache=True):
+        """get the list of valid values for a given key in the mapping query
+
+        Parameters
+        ----------
+        enum: str 
+            One of: idType, exchCode, micCode, currency, marketSecDes, securityType,
+            securityType2, stateCode
+        """
+
+        url = self.MAPPING_ENUM_URL.format(key=enum)
+        request = self.session.get(url)
+        results = request.json()
+        return results['values']# }}}
+
+    def _parse_mapping_result(self, results, df):# {{{
+        """helper method to unnest the result of a mapping request and 
+        turn into a dataframe
+
+        Parameters
+        ----------
+        results: list
+            The result of `OpenFigi._send_mapping_requests`
+
+        df: pd.DataFrame
+            The queried dataframe - used for linking a result back to an initial query
+        """
+
+        df.columns = ['q_' + x for x in df.columns.tolist()]
+        df['query_number'] = range(df.shape[0])
+
+        q_cols = df.columns.tolist()
+        df_dict = df.to_dict('records')
+
+
+        data = pd.DataFrame(columns=q_cols + ['figi', 'name', 'ticker', 'exchCode', 
+            'compositeFIGI', 'securityType', 'marketSector', 'shareClassFIGI',
+            'securityType2', 'securityDescription', 'status_code', 'status_message'])
+
+        cleaned_results = []
+
+        for query, result in zip(df_dict, results):
+            if 'data' in result.keys():
+                for inner_res in result['data']:
+                    tmp = query.copy()
+                    tmp['status_code'] = 'success'
+                    tmp['status_message'] = 'success'
+                    tmp.update(inner_res)
+                    cleaned_results.append(tmp)
+            elif 'warning' in result.keys():
+                tmp = query.copy()
+                tmp['status_code'] = 'warning'
+                tmp['status_message'] = result['warning']
+                cleaned_results.append(tmp)
+            elif 'error' in result.keys():
+                tmp = query.copy()
+                tmp['status_code'] = 'error'
+                tmp['status_message'] = result['error']
+                cleaned_results.append(tmp)
+
+
+        return pd.DataFrame(cleaned_results)# }}}
+
+    def _clean_mapping_job_request(self, df_dict):# {{{
+        """method to remove items where `None` is not a valid value
+        to provide in the API. This will occur when you are making multiple mapping requests
+        where they don't all use the same set of mapping keys"""
+
+        valid_nones = ['strike', 'contractSize', 'coupon', 'expiration', 'maturity']
+
+        new_df_dict = []
+        for record in df_dict:
+            new_record = record.copy()
+
+            # filtering out the valid nones
+            for k, v in record.items():
+                if (k not in valid_nones) and pd.isnull(v):
+                    new_record.pop(k)
+            new_df_dict.append(new_record)
+
+        return new_df_dict# }}}
+
+    def map_dataframe(self, df):# {{{
+        """map a pandas DataFrame to values from the Open FIGI API
+
+        Parameters
+        ----------
+            df: pd.DataFrame
+                the dataframe to map, the columns should be valid parameters to be
+                given to the Open FIGI API
+
+        Returns
+        -------
+            result: pd.DataFrame
+                returns the same dataframe as the initial input with the addition
+                of the open figi result columns
+        """
+
+        assert 'idType' in df.columns
+        assert 'idValue' in df.columns
+
+        df = df.copy()
+
+        df_dict = df.to_dict('records')
+
+        df_dict = self._clean_mapping_job_request(df_dict)
+
+        chunks = self._divide_chunks(df_dict, self._mapping_job_limit)
+
+        result = self._send_mapping_requests(chunks)
+
+        result_df = self._parse_mapping_result(result, df)
+        return result_df# }}}
+
+
+f = OpenFigi()
 f.connect()
 
-x = f.map_figis('BBG0032FLQC3')
+x = f.map_figis(['BBG0032FLQC3', 'BBG0032FLQC1', 'BBG00JPR0LW9'])
+
+
+df = pd.DataFrame({'idType': ['ID_BB_GLOBAL', 'ID_BB_GLOBAL', 'ID_BB_GLOBAL'],
+    'idValue': ['BBG0032FLQC3', 'BBG00JPR0LW9', 'BBG00JPR0LW6']})
+
+df = pd.DataFrame({'idType': 'TICKER', 'idValue': 'IBM', 'marketSecDes': 'Equity',
+    'currency': 'USD', 'exchCode': None}, index=[0])
+
+x = f.map_dataframe(df)
