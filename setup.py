@@ -2,6 +2,7 @@ from setuptools import setup
 import pathlib
 
 # python3 setup.py sdist bdist_wheel
+# twine upload dist/*
 
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
