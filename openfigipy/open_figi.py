@@ -309,7 +309,7 @@ class OpenFigiClient:
         df_dict = df.to_dict('records')
 
 
-        data = pd.DataFrame(columns=q_cols + ['figi', 'name', 'ticker', 'exchCode', 
+        data = pd.DataFrame(columns=q_cols + ['result_number', 'figi', 'name', 'ticker', 'exchCode', 
             'compositeFIGI', 'securityType', 'marketSector', 'shareClassFIGI',
             'securityType2', 'securityDescription', 'status_code', 'status_message'])
 
@@ -317,21 +317,24 @@ class OpenFigiClient:
 
         for query, result in zip(df_dict, results):
             if 'data' in result.keys():
-                for inner_res in result['data']:
+                for res_numb, inner_res in enumerate(result['data']):
                     tmp = query.copy()
                     tmp['status_code'] = 'success'
                     tmp['status_message'] = 'success'
+                    tmp['result_number'] = res_numb
                     tmp.update(inner_res)
                     cleaned_results.append(tmp)
             elif 'warning' in result.keys():
                 tmp = query.copy()
                 tmp['status_code'] = 'warning'
                 tmp['status_message'] = result['warning']
+                tmp['result_number'] = 0
                 cleaned_results.append(tmp)
             elif 'error' in result.keys():
                 tmp = query.copy()
                 tmp['status_code'] = 'error'
                 tmp['status_message'] = result['error']
+                tmp['result_number'] = 0
                 cleaned_results.append(tmp)
 
 

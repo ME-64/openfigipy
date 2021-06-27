@@ -23,10 +23,10 @@ from openfigipy import OpenFigiClient
 
 # api key can either be given with the api_key argument
 # or set as the environment variable `OPENFIGI_API_KEY
-ofp = OpenFigiClient()
+ofc = OpenFigiClient()
 
 # establish a requests session
-ofp.connect()
+ofc.connect()
 
 # create a dataframe of look-ups - each row is represents one query that will
 # be batched in jobs
@@ -42,7 +42,7 @@ print(df)
 # 1  ID_BB_GLOBAL  BBG0032FLQC3      USD       Equity
 
 
-result = ofp.map_dataframe(df)
+result = ofc.map_dataframe(df)
 
 print(result.head())
 
@@ -80,12 +80,16 @@ too.
 `query_number`: Shows which query the result is related to, can be helpful when
 a query returns multiple matches.
 
+`result_number`: Shows the order in which the results were returned by the Open
+FIGI API. Generally the best match is shown first (i.e. `result_number` 0)
+
 
 `status_code`: one of ('success', 'warning', 'error') as per the documentation
 on the Open FIGI API.
 
 `status_message`: The associated message with the given `status_code`. Helpful
 for understanding why results might not have been returned.
+
 
 
 
