@@ -4,6 +4,7 @@ import urllib3
 import json
 import re
 import os
+import urllib3
 
 import pandas as pd
 import ratelimit
@@ -62,8 +63,8 @@ class OpenFigiClient:
             self._search_filter_result_limit = 150
 
 
-        retries = urllib3.util.retry.Retry(total=2, 
-                backoff_factor=1,
+        retries = urllib3.util.retry.Retry(total=5, 
+                backoff_factor=2,
                 status_forcelist=[429, 500, 503, 502, 413, 504])
 
         ada = requests.adapters.HTTPAdapter(max_retries=retries)
@@ -85,7 +86,7 @@ class OpenFigiClient:
             yield l[i:i + n]# }}}
 
     @ratelimit.sleep_and_retry# {{{
-    @ratelimit.limits(calls=25, period=6)
+    @ratelimit.limits(calls=25, period=9)
     def _send_auth_mapping_request(self, js):
         """send the complete request to the Open FIGI API, with API key rate limit
 
