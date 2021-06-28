@@ -4,7 +4,6 @@ import urllib3
 import json
 import re
 import os
-import urllib3
 
 import pandas as pd
 import ratelimit
@@ -71,8 +70,8 @@ class OpenFigiClient:
         self.session = requests.Session(**self.kwargs)
         self.session.mount('https://', ada)
         self.session.headers.update(headers)
-        assert_status_hook = lambda response, *args, **kwargs: response.raise_for_status()
-        self.session.hooks["response"] = [assert_status_hook]
+        # assert_status_hook = lambda response, *args, **kwargs: response.raise_for_status()
+        # self.session.hooks["response"] = [assert_status_hook]
 
         # }}}
 
