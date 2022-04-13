@@ -2,6 +2,7 @@ from setuptools import setup
 from setuptools import find_packages
 import pathlib
 from glob import glob
+from os.path import splitext
 
 # python3 setup.py sdist bdist_wheel
 # twine upload dist/*

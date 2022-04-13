@@ -1,26 +1,43 @@
 from src.openfigipy import OpenFigiClient
 import requests
-import unittest
+
+from openfigipy import OpenFigiClient
+
+import requests
+import pandas as pd
+
+def test_connect():# {{{
+    ofc = OpenFigiClient()
+    ofc.connect()
+    assert hasattr(ofc, 'api_key')
+    assert hasattr(ofc, 'session')
+    assert isinstance(ofc.session, requests.Session)
+    assert 'Content-Type' in ofc.session.headers.keys()
+    ofc.disconnect()# }}}
+
+ofc = OpenFigiClient()
+ofc.connect()
 
 
-class ClientTest(unittest.TestCase):
+def test_map():# {{{
 
-    def test_connect(self):
-        ofp = OpenFigiClient()
-        ofp.connect()
-        self.assertTrue(hasattr(ofp, 'api_key'))
-        self.assertTrue(hasattr(ofp, 'session'))
-        self.assertTrue(isinstance(ofp.session, requests.Session))
-        self.assertIn('Content-Type', ofp.session.headers.keys())
+    df = pd.DataFrame({'idValue': ['BBG000BLNNH6'], 'idType': ['ID_BB_GLOBAL']})
 
-    def test_divide_chunks(self):
-        long_li = list(range(100))
-        short_li = [1, 2]
+    res = ofc.map(df)
+    assert res['shareClassFIGI'].iloc[0] == 'BBG001S5S399'
+    assert res['q_idType'].iloc[0] == 'ID_BB_GLOBAL'
+    assert res['q_idValue'].iloc[0] == 'BBG000BLNNH6'
+    assert res['securityType'].iloc[0] == 'Common Stock'
 
-        ofp = OpenFigiClient()
-        chunk_li = list(ofp._divide_chunks(long_li, 10))
-        chunk_li_2 = list(ofp._divide_chunks(short_li, 10))
 
-        self.assertEqual(len(chunk_li), 10)
-        self.assertEqual(len(chunk_li_2), 1)
-        self.assertEqual(len(chunk_li_2[0]), 2)
+    res = ofc.map_figis(['BBG000BLNNH6'])
+    assert res['shareClassFIGI'].iloc[0] == 'BBG001S5S399'
+    assert res['q_idType'].iloc[0] == 'ID_BB_GLOBAL'
+    assert res['q_idValue'].iloc[0] == 'BBG000BLNNH6'
+    assert res['securityType'].iloc[0] == 'Common Stock'# }}}
+
+def test_search():# {{{
+
+    res = ofc.search('IBM', exchCode='US', marketSecDes='Equity', result_limit=1)
+    assert res['securityType'].iloc[0] == 'Common Stock'
+    assert res['securityType'].iloc[0] == 'Common Stock'# }}}
