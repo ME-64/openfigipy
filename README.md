@@ -9,7 +9,7 @@ Features Include
 
 - Automatically throttles requests to respect the API rate limit
 - Automatically handles the chunking and retrieval of mapping jobs
-- Automatically handles the pagnation of search requests
+- Automatically handles the pagination of search requests
 - Queries are given by providing the relevant method with a pandas DataFrame,
   allowing easy integration with existing reference data pipelines.
 
@@ -28,7 +28,7 @@ ofc = OpenFigiClient()
 # establish a requests session
 ofc.connect()
 
-# create a dataframe of look-ups - each row is represents one query that will
+# create a dataframe of look-ups - each row represents one query that will
 # be batched in jobs
 # the column headers represent the relevant key from the open figi api
 df = pd.DataFrame({'idType': ['TICKER', 'ID_BB_GLOBAL'],
@@ -73,7 +73,7 @@ print(result.columns.tolist())
 
 The resulting dataframe will keep your original query columns, prefixed with
 `q_` as well as the documented response from the Open FIGI API. This is to
-ensure there isn't overlap (i.e. if your query contains `exchCode` and the
+ensure there isn't an overlap i.e. if your query contains `exchCode` and the
 results do to. There are also some additional helper columns described below
 too.
 
@@ -91,7 +91,14 @@ on the Open FIGI API.
 for understanding why results might not have been returned.
 
 
+Running tests
+-------------
 
+To run all unit tests for this module:
+```shell
+$ python -m unittest discover
+```
+Please be aware some tests might take some time since they call external APIs.
 
 Todo
 ----
@@ -100,7 +107,7 @@ Todo
 - Setup automatic documentation generation w/ Sphinx
 - explore if type hinting could help
 - Setup automatic linting and checking
-- Setup continious integration
+- Setup continuous integration
     - tests
     - documentation
     - pypi publishing
