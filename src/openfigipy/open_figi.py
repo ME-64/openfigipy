@@ -1,8 +1,5 @@
 import requests
-import time
 import urllib3
-import json
-import re
 import os
 
 import pandas as pd
@@ -233,7 +230,7 @@ class OpenFigiClient:
         return json_result# }}}
 
     @cachedmethod(cache=TTLCache(maxsize=10, ttl=43200))# {{{
-    def get_mapping_enums(self, enum, cache_breaker=1):
+    def get_mapping_enums(self, enum, cache_breaker=1): 
         """get the list of valid values for a given key in the mapping query
 
         Parameters
@@ -241,6 +238,9 @@ class OpenFigiClient:
         enum: str 
             One of: idType, exchCode, micCode, currency, marketSecDes, securityType,
             securityType2, stateCode
+
+        cache_breaker: int
+            optional parameter if you don't want to use cached mapping variables
 
         Returns
         -------
@@ -338,7 +338,8 @@ class OpenFigiClient:
         -------
         result: pd.DataFrame
             returns the same dataframe as the initial input with the addition
-            of the open figi result columns
+            of the open figi result columns, and some helper columns (such as
+            query ref if it was included)
         """
 
         assert 'idType' in df.columns
@@ -415,7 +416,7 @@ class OpenFigiClient:
 
         gen_results = self._search_filter_pagnation(query=query, typ=typ, result_limit=result_limit, **kwargs)
 
-        for i, result in enumerate(gen_results):
+        for result in gen_results:
             results.append(result)
         return pd.DataFrame(results, columns=self.ALL_COLS)# }}}
 

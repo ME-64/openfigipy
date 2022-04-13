@@ -16,13 +16,15 @@ Features Include
 Getting Started
 ---------------
 
+To install this library simply run `pip install openfigipy`.
+
 ```python3
 
 import pandas as pd
 from openfigipy import OpenFigiClient
 
 # api key can either be given with the api_key argument
-# or set as the environment variable `OPENFIGI_API_KEY
+# or set as the environment variable `OPENFIGI_API_KEY`
 ofc = OpenFigiClient()
 
 # establish a requests session
@@ -42,7 +44,7 @@ print(df)
 # 1  ID_BB_GLOBAL  BBG0032FLQC3      USD       Equity
 
 
-result = ofc.map_dataframe(df)
+result = ofc.map(df)
 
 print(result.head())
 
@@ -83,7 +85,6 @@ a query returns multiple matches.
 `result_number`: Shows the order in which the results were returned by the Open
 FIGI API. Generally the best match is shown first (i.e. `result_number` 0)
 
-
 `status_code`: one of ('success', 'warning', 'error') as per the documentation
 on the Open FIGI API.
 
@@ -96,7 +97,7 @@ Running tests
 
 To run all unit tests for this module:
 ```shell
-$ python -m unittest discover
+$ pytest
 ```
 Please be aware some tests might take some time since they call external APIs.
 
