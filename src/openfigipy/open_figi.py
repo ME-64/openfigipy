@@ -7,7 +7,7 @@ import os
 
 import pandas as pd
 import ratelimit
-from cachetools import TTLCache, cached
+from cachetools import TTLCache, cachedmethod
 
 
 class OpenFigiClient:
@@ -84,33 +84,67 @@ class OpenFigiClient:
         for i in range(0, len(l), n): 
             yield l[i:i + n]# }}}
 
+    def _handle_query_ref(self, js, ref, res_json):# {{{
+        """helper method to handle when a query reference is set"""
+        assert len(res_json) == len(js) # ensuring you get same number of results back
+
+        for index, data in enumerate(res_json):
+            data['query_ref'] = ref[index]
+        return res_json# }}}
+
     @ratelimit.sleep_and_retry# {{{
     @ratelimit.limits(calls=12, period=6)
-    def _send_auth_mapping_request(self, js):
+    def _send_auth_mapping_request(self, js, query_ref):
         """send the complete request to the Open FIGI API, with API key rate limit
 
         Parameters
         ----------
         js: dict
             the data to be sent in the POST request
+        query_ref: bool
+            whether there is a reference to the specific request
         """
+        if query_ref:
+            ref = [x['query_ref'] for x in js]
+            for x in js:
+                x.pop('query_ref')
+
         request = self.session.post(self.MAPPING_URL, json=js)
-        return request.json()# }}}
+        res_json = request.json()
+
+        if query_ref:
+            clean_res = self._handle_query_ref(js, ref, res_json)
+            return clean_res
+
+        return res_json# }}}
 
     @ratelimit.sleep_and_retry# {{{
     @ratelimit.limits(calls=25, period=60)
-    def _send_unauth_mapping_request(self, js):
+    def _send_unauth_mapping_request(self, js, query_ref):
         """send the complete request to the Open FIGI API, with non-API Key rate limit
 
         Parameters
         ----------
         json: dict
             the data to be sent in the POST request
+        query_ref: bool
+            whether there is a reference to the specific request
         """
-        request = self.session.post(self.MAPPING_URL, json=js)
-        return request.json()# }}}
+        if query_ref:
+            ref = [x['query_ref'] for x in js]
+            for x in js:
+                x.pop('query_ref')
 
-    def _send_mapping_request(self, js):# {{{
+        request = self.session.post(self.MAPPING_URL, json=js)
+        res_json = request.json()
+
+        if query_ref:
+            clean_res = self._handle_query_ref(js, ref, res_json)
+            return clean_res
+
+        return res_json# }}}
+
+    def _send_mapping_request(self, js, query_ref):# {{{
         """helper method to send requests with the correct rate limit
         Parameters
         ----------
@@ -118,16 +152,16 @@ class OpenFigiClient:
             the data to be sent in the POST request
         """
         if self.api_key:
-            json_result = self._send_auth_mapping_request(js)
+            json_result = self._send_auth_mapping_request(js, query_ref)
         else:
-            json_result = self._send_unauth_mapping_request(js)
+            json_result = self._send_unauth_mapping_request(js, query_ref)
         return json_result# }}}
 
-    def _send_mapping_requests(self, jobs):# {{{
+    def _send_mapping_requests(self, jobs, query_ref):# {{{
         """simple loop wrapper around `self._send_mapping_request`"""
         results = []
         for job in jobs:
-            result = self._send_mapping_request(job)
+            result = self._send_mapping_request(job, query_ref)
             results.extend(result)
         return results# }}}
 
@@ -198,8 +232,8 @@ class OpenFigiClient:
         # print(js)
         return json_result# }}}
 
-    @cached(cache=TTLCache(maxsize=10, ttl=43200))# {{{
-    def get_mapping_enums(self, enum, use_cache=True):
+    @cachedmethod(cache=TTLCache(maxsize=10, ttl=43200))# {{{
+    def get_mapping_enums(self, enum, cache_breaker=1):
         """get the list of valid values for a given key in the mapping query
 
         Parameters
@@ -282,6 +316,8 @@ class OpenFigiClient:
 
             # filtering out the valid nones
             for k, v in record.items():
+                if k == 'query_ref':
+                    continue
                 if (k not in valid_nones) and pd.isnull(v):
                     new_record.pop(k)
             new_df_dict.append(new_record)
@@ -295,7 +331,8 @@ class OpenFigiClient:
         ----------
         df: pd.DataFrame
             the dataframe to map, the columns should be valid parameters to be
-            given to the Open FIGI API
+            given to the Open FIGI API. There is also an optional `query_ref` column
+            that can be used to map the result back to a single identifier
 
         Returns
         -------
@@ -307,6 +344,11 @@ class OpenFigiClient:
         assert 'idType' in df.columns
         assert 'idValue' in df.columns
 
+        if 'query_ref' in df.columns:
+            query_ref = True
+        else:
+            query_ref = False
+
         df = df.copy()
 
         df_dict = df.to_dict('records')
@@ -315,7 +357,7 @@ class OpenFigiClient:
 
         chunks = self._divide_chunks(df_dict, self._mapping_job_limit)
 
-        result = self._send_mapping_requests(chunks)
+        result = self._send_mapping_requests(chunks, query_ref=query_ref)
 
         result_df = self._parse_mapping_result(result, df)
         return result_df# }}}
