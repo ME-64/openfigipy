@@ -90,7 +90,7 @@ class OpenFigiClient:
         return res_json# }}}
 
     @ratelimit.sleep_and_retry# {{{
-    @ratelimit.limits(calls=12, period=6)
+    @ratelimit.limits(calls=24, period=6)
     def _send_auth_mapping_request(self, js, query_ref):
         """send the complete request to the Open FIGI API, with API key rate limit
 
